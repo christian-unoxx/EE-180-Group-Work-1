@@ -1,0 +1,94 @@
+/*
+  EE 180 Group Work 1
+  Christian Cahig 2013-0024
+  christian.cahig@g.msuiit.edu.ph
+  September 2016
+*/
+
+#include <stdlib.h>
+#include <avr/io.h>
+#include <util/delay.h>
+#define convFactor 19.53125 //Conversion factor for ADC readout to resistance
+                            //Note: 9.765625 for 10kOhm potentiometer; 19.53125 for 20kOhm potentiometer
+
+void portdInit(void); //Function for initializing PORTD
+void adcInit(void); //Function for initializing ADC
+void uartInit(void); //Function for initializing UART
+void uartTx(unsigned char data); //Function for transmitting data through UART
+void uartTxStr(char* strPtr); //Function for transmitting character string through UART
+
+int main()
+{
+  uint16_t adcVal = 0; //Stores 16-bit ADC value
+  float floatOhm = 0; //Stores approximate resistance in float type, i.e. including decimal places
+  int intOhm = 0; //Stores approximate resistance in int type, i.e. excluding decimal places
+  char adcAStr[5]; //Buffer array for equivalent ASCII decimals of the characters of ADC integer value, plus null terminator
+  char OhmIntStr[6]; //Buffer array for integral part of approximate resistance
+  char OhmDecStr[6]; //Buffer array for fractional part of approximate resistance
+  
+  portdInit(); //Initialize Digital Pin 2
+  adcInit(); //Initialize ADC
+  uartInit(); //Initialize UART
+  
+  while(1)
+  {
+    ADCSRA |= (1<<ADSC); //Start conversion
+    while(ADCSRA & 0b01000000); //Wait until a conversion is done
+    adcVal = ADC; //Store 16-bit ADC value
+    fOhm = convFactor*adcVal; //Store approximate resistance including decimal places
+    dOhm = (int)fOhm; //Store approximate resistance excluding decimal places
+    itoa(adcVal, adcAStr, 10); //Convert the characters of the ADC integer value to equivalent ASCII decimal, and store to buffer array
+    itoa(dOhm, OhmIntStr, 10); //Convert the characters of the integral part of the approximate resistance, and store to buffer array
+    itoa(100000*(fOhm-dOhm), OhmDecStr, 10); //Convert the characters of the fractional part of the approximate resistance, and store to buffer array
+
+    //Check if resistance is within 4000 to 7000 Ohms
+    if ( (convFactor*adcVal>4000.0) && (convFactor*adcVal<7000.0) )
+    {
+      PORTD |= (1<<PORTD2); //LED On
+    } else
+    {
+      PORTD &= ~(1<<PORTD2); //LED Off
+    }
+    uartTxStr(adcAStr); //Transmit buffer array through UART
+    //Transmit new line
+    uartTx('\r');
+    uartTx('\n');
+    uartTxStr(OhmIntStr); //Transmit buffer array through UART
+    uartTx('.'); //Transmit decimal point
+    uartTxStr(OhmDecStr); //Transmit buffer array through UART
+    //Transmit new line
+    uartTx('\r');
+    uartTx('\n');
+  }
+return(0);
+}
+
+void portdInit(void)
+{
+  DDRD = 0b00000100;
+}
+void adcInit(void)
+{
+  ADCSRA = 0b10000111;
+  ADMUX = 0b01000011;
+  DIDR0 = 0b00001000;
+}
+void uartInit(void)
+{
+  UBRR0 = 103;
+  UCSR0B = 0b00011000;
+  UCSR0C = 0b00000110;
+}
+void uartTx(unsigned char data) //Please refer to page 184 of the data sheet
+{
+  while(!(UCSR0A & 0b00100000)); //Wait until data register is empty
+  UDR0 = data; //Transmit data
+}
+void uartTxStr(char* strPtr)
+{
+  while(*strPtr != 0x00) //Do routine until element is null character
+  {
+    uartTx(*strPtr);
+    strPtr++;
+  }
+}
